@@ -8,6 +8,18 @@ export interface ConceptSection {
   content: string;
 }
 
+export interface ComparisonItem {
+  label: string;
+  icon: string;
+  description: string;
+  points: string[];
+}
+
+export interface Comparison {
+  title: string;
+  items: ComparisonItem[];
+}
+
 export interface DetailContent {
   id: string;
   title: string;
@@ -15,6 +27,9 @@ export interface DetailContent {
   flow: FlowStep[];
   concepts: ConceptSection[];
   example: { title: string; language: string; code: string };
+  additionalExamples?: { title: string; language: string; code: string }[];
+  comparisons?: Comparison[];
+  tips?: string[];
   whenToUse: string[];
 }
 
@@ -64,6 +79,92 @@ export const detailContent: Record<string, DetailContent> = {
   ]
 }`
     },
+    additionalExamples: [
+      {
+        title: "Segment Definition Rule (RTCDP)",
+        language: "json",
+        code: `{
+  "segmentName": "High-Value Cart Abandoners",
+  "evaluationType": "streaming",
+  "expression": {
+    "type": "PQL",
+    "format": "pql/text",
+    "value": "select profile where
+      commerce.checkouts.value = 0
+      AND productListItems.priceTotal > 100
+      AND homeAddress.countryCode = 'US'
+      AND segmentMembership.get('loyalty-members').status = 'realized'"
+  },
+  "mergePolicyId": "default-merge-policy",
+  "estimatedSize": 42500
+}`
+      },
+      {
+        title: "Identity Graph Example",
+        language: "json",
+        code: `{
+  "identityGraph": {
+    "person": "Jane Doe",
+    "identities": [
+      { "namespace": "ECID", "id": "38400000-04cb-...", "source": "Web SDK" },
+      { "namespace": "Email", "id": "jane@example.com", "source": "Login" },
+      { "namespace": "CRMId", "id": "CRM-789456", "source": "Salesforce Connector" },
+      { "namespace": "LoyaltyId", "id": "LOY-123456", "source": "POS System" },
+      { "namespace": "PhoneNumber", "id": "+1-555-0123", "source": "Call Center" }
+    ],
+    "linkedProfiles": 5,
+    "mergePolicy": "timestamp-ordered"
+  }
+}`
+      }
+    ],
+    comparisons: [
+      {
+        title: "Segment Evaluation Methods",
+        items: [
+          {
+            label: "Streaming (Real-Time)",
+            icon: "⚡",
+            description: "Events evaluated as they arrive — segment membership updates within minutes.",
+            points: [
+              "Best for: time-sensitive triggers (cart abandon, price alerts)",
+              "Latency: seconds to minutes",
+              "Supports: profile attribute and event-based rules",
+              "Limitation: cannot use complex lookbacks (e.g., 'count of events in last 90 days')"
+            ]
+          },
+          {
+            label: "Batch (Scheduled)",
+            icon: "🗓️",
+            description: "Evaluated on a schedule — typically once or twice daily.",
+            points: [
+              "Best for: stable audiences (demographic segments, loyalty tiers)",
+              "Latency: hours (runs on schedule)",
+              "Supports: complex queries with large lookback windows",
+              "Limitation: not suitable for real-time personalization"
+            ]
+          },
+          {
+            label: "Edge (Sub-Second)",
+            icon: "🌐",
+            description: "Evaluated on Adobe Edge Network for instant decisioning.",
+            points: [
+              "Best for: same-page personalization, Target integration",
+              "Latency: <100ms",
+              "Supports: simple profile attribute rules",
+              "Limitation: limited rule complexity, requires Edge Segmentation enabled"
+            ]
+          }
+        ]
+      }
+    ],
+    tips: [
+      "AEP is the data layer (ingestion, schema, identity); RTCDP is the activation layer (segments, destinations)",
+      "Identity Service is the linchpin — poor identity configuration breaks everything downstream",
+      "Start with streaming segments for real-time use cases, batch for everything else",
+      "Merge policies determine whose data wins when identities conflict — configure these early",
+      "DULE governance labels are enforced automatically at destination export — not just policy documents"
+    ],
     whenToUse: [
       "You need to unify customer data from multiple sources into a single profile before segmenting audiences",
       "Marketing teams need self-service audience building on top of a governed data foundation",
@@ -124,6 +225,162 @@ export const detailContent: Record<string, DetailContent> = {
   }
 }`
     },
+    additionalExamples: [
+      {
+        title: "Web SDK – Sending Cart Abandon Event (alloy.js)",
+        language: "javascript",
+        code: `// Detect cart abandonment via page unload / timeout
+alloy("sendEvent", {
+  xdm: {
+    eventType: "commerce.cartAbandoned",
+    commerce: {
+      cart: {
+        cartID: "CART-98765",
+        priceTotal: 249.99
+      }
+    },
+    productListItems: [
+      {
+        SKU: "WH-500",
+        name: "Wireless Headphones",
+        priceTotal: 199.99,
+        quantity: 1
+      },
+      {
+        SKU: "PC-200",
+        name: "Phone Case",
+        priceTotal: 49.99,
+        quantity: 1
+      }
+    ]
+  }
+});`
+      },
+      {
+        title: "AJO Message Personalization (Handlebars)",
+        language: "handlebars",
+        code: `<!-- AJO Email Template with Profile Personalization -->
+<h1>Hi {{profile.person.name.firstName}},</h1>
+
+<p>You left some items in your cart!</p>
+
+{{#each context.journey.events.cartAbandoned.productListItems}}
+  <div class="product-card">
+    <h3>{{this.name}}</h3>
+    <p>Price: \${{this.priceTotal}}</p>
+  </div>
+{{/each}}
+
+{{#if (equals profile.loyalty.tier "Gold")}}
+  <p>As a Gold member, enjoy <strong>15% off</strong> your order!</p>
+  <a href="https://shop.example.com/cart?discount=GOLD15">Complete Purchase</a>
+{{else}}
+  <p>Complete your order and earn loyalty points!</p>
+  <a href="https://shop.example.com/cart">Return to Cart</a>
+{{/if}}`
+      },
+      {
+        title: "AJO Journey Definition (Conceptual JSON)",
+        language: "json",
+        code: `{
+  "journeyName": "Cart Abandonment Recovery v2",
+  "entryEvent": "commerce.cartAbandoned",
+  "entryCondition": "cart.priceTotal > 50",
+  "reEntrancePolicy": "allow_after_30_days",
+  "maxDuration": "7_days",
+  "nodes": [
+    { "type": "wait", "duration": "1h" },
+    { "type": "condition", "check": "hasPurchased()", "yes": "exit", "no": "next" },
+    { "type": "action", "channel": "email", "template": "cart-recovery-v2" },
+    { "type": "wait", "duration": "24h" },
+    { "type": "condition", "check": "hasPurchased()", "yes": "exit", "no": "next" },
+    { "type": "condition", "check": "hasAppInstalled()", "yes": "push", "no": "sms" },
+    { "type": "action", "id": "push", "channel": "push", "template": "cart-push-reminder" },
+    { "type": "action", "id": "sms", "channel": "sms", "template": "cart-sms-last-chance" },
+    { "type": "wait", "duration": "48h" },
+    { "type": "condition", "check": "hasPurchased()", "yes": "exit", "no": "next" },
+    { "type": "action", "channel": "email", "template": "cart-final-urgency" }
+  ]
+}`
+      }
+    ],
+    comparisons: [
+      {
+        title: "Journeys vs Campaigns",
+        items: [
+          {
+            label: "Journeys (Event-Driven)",
+            icon: "⚡",
+            description: "Multi-step workflows triggered by real-time events or segment entry. Each profile travels independently through the journey at their own pace.",
+            points: [
+              "Triggered by: real-time events (purchase, abandon) or segment qualification",
+              "Supports: wait steps, conditions, branching, exit conditions",
+              "Execution: per-profile — each person enters independently",
+              "Best for: abandonment, onboarding, lifecycle, re-engagement",
+              "Re-entrance: configurable (once, after N days, always)"
+            ]
+          },
+          {
+            label: "Campaigns (Scheduled)",
+            icon: "📅",
+            description: "One-time or recurring message blasts to a selected audience segment. All recipients receive the message at the same time.",
+            points: [
+              "Triggered by: manual schedule or recurring schedule",
+              "Supports: A/B testing, content experiments, holdout groups",
+              "Execution: batch — entire audience at once",
+              "Best for: promotions, newsletters, announcements, product launches",
+              "Re-entrance: N/A — each send is a separate execution"
+            ]
+          }
+        ]
+      },
+      {
+        title: "Journey Canvas Node Types",
+        items: [
+          {
+            label: "Entry Nodes",
+            icon: "🚀",
+            description: "How profiles enter the journey.",
+            points: [
+              "Read Audience: enter all members of a segment",
+              "Unitary Event: enter when a specific event occurs",
+              "Audience Qualification: enter when joining/leaving a segment",
+              "Business Event: organization-wide trigger (e.g., flash sale start)"
+            ]
+          },
+          {
+            label: "Action Nodes",
+            icon: "✉️",
+            description: "What happens to the profile during the journey.",
+            points: [
+              "Email: send personalized email using AJO templates",
+              "Push: mobile push notification via AJO messaging",
+              "SMS: text message via configured SMS provider",
+              "Custom Action: webhook to external system (Slack, CRM, etc.)"
+            ]
+          },
+          {
+            label: "Control Nodes",
+            icon: "🔀",
+            description: "Logic and timing controls.",
+            points: [
+              "Condition: if/then branching on profile attributes or events",
+              "Wait: pause for duration or until specific date/event",
+              "End: terminate journey for this profile",
+              "Split: percentage-based random audience split"
+            ]
+          }
+        ]
+      }
+    ],
+    tips: [
+      "AJO reads directly from AEP's profile store — there's zero data copy or sync delay",
+      "Journey entry events must have the 'Orchestration' field group in their XDM schema",
+      "Use exit conditions to stop messaging users who already converted mid-journey",
+      "Message personalization uses Handlebars syntax: {{profile.person.name.firstName}}",
+      "Journeys are for 1:1 real-time orchestration; Campaigns are for 1:many scheduled sends",
+      "Custom actions (webhooks) let journeys trigger external systems like Slack alerts or CRM updates"
+    ],
     whenToUse: [
       "You need real-time, event-driven journeys triggered by customer actions (purchases, abandonment, sign-ups)",
       "Campaigns should be personalized using the full customer profile, not just list-based attributes",
@@ -187,6 +444,84 @@ export const detailContent: Record<string, DetailContent> = {
   }
 }`
     },
+    additionalExamples: [
+      {
+        title: "Data View – Derived Field (Marketing Channel)",
+        language: "json",
+        code: `{
+  "derivedFieldName": "Marketing Channel",
+  "type": "CASE WHEN",
+  "rules": [
+    { "when": "url_parameter('utm_medium') = 'cpc'", "then": "'Paid Search'" },
+    { "when": "url_parameter('utm_medium') = 'email'", "then": "'Email'" },
+    { "when": "referring_domain CONTAINS 'google'", "then": "'Organic Search'" },
+    { "when": "referring_domain CONTAINS 'facebook'", "then": "'Social'" },
+    { "when": "referring_domain = ''", "then": "'Direct'" },
+    { "else": "'Other'" }
+  ]
+}`
+      },
+      {
+        title: "CJA Workspace – Freeform Table Query",
+        language: "json",
+        code: `{
+  "visualization": "freeformTable",
+  "dataView": "omnichannel-dv",
+  "dateRange": "last90days",
+  "dimensions": ["Marketing Channel", "Device Type"],
+  "metrics": [
+    { "name": "Sessions", "attribution": "last-touch" },
+    { "name": "Orders", "attribution": "linear" },
+    { "name": "Revenue", "attribution": "time-decay-7d" }
+  ],
+  "segments": [
+    { "name": "Loyalty Members", "definition": "loyaltyTier IS NOT NULL" }
+  ],
+  "breakdown": {
+    "dimension": "Marketing Channel",
+    "by": "Device Type"
+  }
+}`
+      }
+    ],
+    comparisons: [
+      {
+        title: "CJA vs Adobe Analytics",
+        items: [
+          {
+            label: "Adobe Analytics (Legacy)",
+            icon: "📊",
+            description: "Traditional analytics with proprietary data collection and report suites.",
+            points: [
+              "Data source: AppMeasurement.js / Web SDK → Analytics processing",
+              "Identity: visitor ID (cookie-based), limited cross-device",
+              "Schema: eVars, props, events — fixed data model",
+              "Retention: 25 months standard",
+              "Cross-channel: limited to web/app only"
+            ]
+          },
+          {
+            label: "Customer Journey Analytics",
+            icon: "🔮",
+            description: "Next-gen analytics reading directly from AEP's data lake.",
+            points: [
+              "Data source: any AEP dataset (web, CRM, POS, call center, IoT)",
+              "Identity: AEP identity stitching — full cross-device/cross-channel",
+              "Schema: XDM-based — any field can be a dimension or metric",
+              "Retention: unlimited (depends on AEP data lake retention)",
+              "Cross-channel: true omnichannel with person-level stitching"
+            ]
+          }
+        ]
+      }
+    ],
+    tips: [
+      "CJA Connections point to AEP datasets — you can include Event, Profile, and Lookup datasets",
+      "Data Views are non-destructive — they transform data at query time, never modifying AEP",
+      "Multiple Data Views on one Connection let different teams see different metrics/dimensions",
+      "Cross-channel identity stitching in CJA uses the person ID field you configure in the Connection",
+      "Derived fields replace Analytics processing rules — but are far more powerful (CASE WHEN, LOOKUP, MATH)"
+    ],
     whenToUse: [
       "You need cross-channel journey analysis combining web, mobile, call center, POS, and CRM data",
       "Traditional Adobe Analytics report suites are too siloed for your analytics needs",
@@ -240,6 +575,53 @@ export const detailContent: Record<string, DetailContent> = {
   }
 }`
     },
+    comparisons: [
+      {
+        title: "Destination Types",
+        items: [
+          {
+            label: "Streaming Destinations",
+            icon: "⚡",
+            description: "Real-time audience updates via HTTP API.",
+            points: [
+              "Latency: minutes (profile changes pushed immediately)",
+              "Examples: Facebook Custom Audiences, Google Customer Match (real-time)",
+              "Best for: personalization engines, real-time ad targeting",
+              "Data format: API payloads with hashed identifiers"
+            ]
+          },
+          {
+            label: "Batch (File) Destinations",
+            icon: "📁",
+            description: "Scheduled file exports to cloud storage.",
+            points: [
+              "Latency: hours (minimum 3-hour intervals)",
+              "Examples: S3, Azure Blob, SFTP, Google Cloud Storage",
+              "Best for: data warehouses, offline analysis, custom pipelines",
+              "Data format: CSV or Parquet files with configurable schemas"
+            ]
+          },
+          {
+            label: "Profile Export Destinations",
+            icon: "👤",
+            description: "Full profile snapshots sent to CRM/marketing tools.",
+            points: [
+              "Latency: varies by destination",
+              "Examples: Salesforce Marketing Cloud, Marketo, Mailchimp",
+              "Best for: email marketing, CRM enrichment",
+              "Data format: profile attributes + segment memberships"
+            ]
+          }
+        ]
+      }
+    ],
+    tips: [
+      "DULE labels on XDM fields are automatically enforced at export — no manual policy checks needed",
+      "Identity mapping configures which AEP namespace maps to destination identifiers (e.g., Email → hashed email for Google)",
+      "Batch destinations support incremental exports (only changed profiles) to reduce transfer volume",
+      "Monitor dataflow runs in the Destinations workspace for export errors and latency metrics",
+      "Same segment can be activated to multiple destinations simultaneously with different identity mappings"
+    ],
     whenToUse: [
       "You need to activate audience segments to advertising platforms for paid media targeting",
       "Audiences should be exported to cloud storage (S3, Azure) for downstream processing",
@@ -293,6 +675,12 @@ export const detailContent: Record<string, DetailContent> = {
   "expiration": "2024-06-30"
 }`
     },
+    tips: [
+      "Published audiences refresh on a schedule (1-24h) — not real-time like RTCDP native segments",
+      "CJA audiences can use cross-channel data and derived fields unavailable in RTCDP's Segment Builder",
+      "This closes the analytics → action loop: discover patterns → publish → activate → measure",
+      "Max audience size depends on AEP entitlements — check your contract limits"
+    ],
     whenToUse: [
       "Analysts have discovered high-value behavioral patterns in CJA that should be activated as segments",
       "Complex audience definitions require cross-channel data or derived fields not available in RTCDP's Segment Builder",
@@ -338,6 +726,12 @@ export const detailContent: Record<string, DetailContent> = {
   }
 }`
     },
+    tips: [
+      "AJO auto-generates system datasets (Message Feedback, Interaction, Journey Step) — just add them to your CJA Connection",
+      "Use CJA attribution models (Linear, Time Decay, Algorithmic) across journey + non-journey touchpoints",
+      "Cohort analysis: compare journey participants vs non-participants to prove journey ROI",
+      "AJO's native reports are channel-specific — CJA provides the cross-channel view"
+    ],
     whenToUse: [
       "You need to analyze journey performance beyond AJO's built-in reports (cross-channel attribution, cohort analysis)",
       "Journey impact must be measured against downstream conversions (purchases, renewals, store visits)",
@@ -401,6 +795,110 @@ export const detailContent: Record<string, DetailContent> = {
   ]
 }`
     },
+    additionalExamples: [
+      {
+        title: "Web SDK Configuration (alloy.js)",
+        language: "javascript",
+        code: `// Initialize Web SDK with Launch
+alloy("configure", {
+  datastreamId: "DATASTREAM-ID-12345",
+  orgId: "ABC123@AdobeOrg",
+  edgeDomain: "edge.example.com",
+  defaultConsent: "in",
+  idMigrationEnabled: true,  // Migrate from legacy AMCV cookie
+  thirdPartyCookiesEnabled: false
+});
+
+// Send page view event
+alloy("sendEvent", {
+  xdm: {
+    eventType: "web.webpagedetails.pageViews",
+    web: {
+      webPageDetails: {
+        name: document.title,
+        URL: window.location.href,
+        siteSection: "products"
+      },
+      webReferrer: {
+        URL: document.referrer
+      }
+    }
+  }
+});`
+      },
+      {
+        title: "Datastream Configuration",
+        language: "json",
+        code: `{
+  "datastreamName": "Production - Web",
+  "datastreamId": "DATASTREAM-ID-12345",
+  "services": {
+    "aep": {
+      "enabled": true,
+      "eventDataset": "web-events-prod",
+      "profileDataset": "web-profiles-prod",
+      "sandbox": "prod"
+    },
+    "analytics": {
+      "enabled": true,
+      "reportSuiteId": "mycompany-prod"
+    },
+    "target": {
+      "enabled": true,
+      "propertyToken": "abc-123-def"
+    },
+    "audienceManager": {
+      "enabled": false
+    }
+  },
+  "environments": {
+    "development": { "sandbox": "dev" },
+    "staging": { "sandbox": "stage" },
+    "production": { "sandbox": "prod" }
+  }
+}`
+      }
+    ],
+    comparisons: [
+      {
+        title: "Legacy Tags vs Web SDK",
+        items: [
+          {
+            label: "Legacy (Multiple Tags)",
+            icon: "📦",
+            description: "Separate libraries for each Adobe solution.",
+            points: [
+              "AppMeasurement.js for Analytics",
+              "at.js for Target",
+              "DIL.js for Audience Manager",
+              "Separate AEP SDK for Experience Platform",
+              "Multiple network calls per page load",
+              "Each library has its own data format"
+            ]
+          },
+          {
+            label: "Web SDK (alloy.js)",
+            icon: "⚡",
+            description: "Single library for all Adobe solutions via Edge Network.",
+            points: [
+              "One library (alloy.js, ~36KB gzipped) for everything",
+              "Single network call to Edge Network",
+              "XDM-formatted data routed by Datastream config",
+              "Edge Network handles server-side forwarding",
+              "Simpler page weight and fewer network requests",
+              "Future-proof — new Adobe services added via Datastream"
+            ]
+          }
+        ]
+      }
+    ],
+    tips: [
+      "Web SDK (alloy.js) replaces AppMeasurement.js, at.js, and DIL.js with a single library",
+      "Datastreams are the routing layer — configure once, send to AEP + Analytics + Target simultaneously",
+      "Data elements in Launch abstract page data — rules reference 'Cart Total' not DOM selectors",
+      "Launch publishes through environments (Dev → Stage → Prod) with approval gates",
+      "Use the XDM object in Web SDK actions — not the legacy 's' object from AppMeasurement"
+    ],
     whenToUse: [
       "You're implementing Adobe Web SDK on a website for the first time and need tag management",
       "Multiple Adobe solutions (AEP, Analytics, Target) need to receive data from a single client-side tag",
@@ -457,6 +955,42 @@ alloy("sendEvent", {
   });
 });`
     },
+    comparisons: [
+      {
+        title: "Decisioning Methods",
+        items: [
+          {
+            label: "Server-Side (Edge)",
+            icon: "☁️",
+            description: "Decisions made on Adobe Edge Network.",
+            points: [
+              "Full activity catalog (AP, Auto-Target, Recommendations)",
+              "ML models run server-side",
+              "Latency: ~100ms network call",
+              "Best for: complex personalization, ML-driven optimization"
+            ]
+          },
+          {
+            label: "On-Device",
+            icon: "📱",
+            description: "Decisions made locally in the browser.",
+            points: [
+              "Limited to A/B and Experience Targeting",
+              "JSON rules artifact cached in browser",
+              "Latency: sub-millisecond (no network)",
+              "Best for: simple tests, low-latency requirements"
+            ]
+          }
+        ]
+      }
+    ],
+    tips: [
+      "renderDecisions: true auto-renders VEC modifications — no custom code needed for visual changes",
+      "Form-based activities use named scopes (formerly mboxes) and return JSON for developer-driven rendering",
+      "A4T eliminates data discrepancy between Target and Analytics by using a single Web SDK event",
+      "Auto-Target uses ML to shift traffic to winning experiences automatically over time",
+      "On-device decisioning is best for simple A/B tests where sub-millisecond latency matters"
+    ],
     whenToUse: [
       "You need to run A/B or multivariate tests on website content with statistical rigor",
       "AI-powered personalization (Auto-Target, Automated Personalization) should optimize content per visitor",
@@ -802,6 +1336,13 @@ export default async function decorate(block) {
     }
   }'`
     },
+    tips: [
+      "Authentication uses IMS service account (OAuth 2.0 JWT) — not user-level credentials",
+      "Batch up to 1MB of records per request to maximize throughput within rate limits",
+      "Implement exponential backoff retry for HTTP 429 (rate limited) responses",
+      "Every payload must conform to a registered XDM schema — validation happens synchronously",
+      "Streaming data appears in Real-Time Profile within seconds, but in data lake within minutes"
+    ],
     whenToUse: [
       "Server-side systems (POS, backend services, IoT) need to send events to AEP in real-time",
       "Transaction data from non-browser sources must enrich the Real-Time Customer Profile immediately",
@@ -861,6 +1402,13 @@ Edge.sendEvent(experienceEvent: event) { handles in
   }
 }`
     },
+    tips: [
+      "Mobile SDK uses same Datastream + Edge Network as Web SDK — same routing, same identity resolution",
+      "Lifecycle events (app launch, crash, background) are tracked automatically — no custom code needed",
+      "syncIdentifiers API links mobile ECID with CRM ID for cross-device profiles",
+      "In-app messages from AJO are fetched on app launch and triggered by segment/event conditions",
+      "Use modular extensions — only install what you need (Edge, Identity, Messaging, etc.)"
+    ],
     whenToUse: [
       "Native iOS/Android apps need to send behavioral data to AEP for unified customer profiles",
       "Mobile app events should trigger AJO journeys (e.g., app install → welcome push sequence)",
@@ -924,6 +1472,105 @@ _dmarc.example.com. 3600 IN TXT  "v=DMARC1; p=quarantine; rua=mailto:dmarc@examp
 example.com.       3600 IN CAA   0 issue "letsencrypt.org"
 example.com.       3600 IN CAA   0 issue "digicert.com"`
     },
+    additionalExamples: [
+      {
+        title: "DNS Lookup with dig",
+        language: "bash",
+        code: `# Query A record
+$ dig www.example.com A +short
+203.0.113.10
+
+# Query MX records with full details
+$ dig example.com MX
+;; ANSWER SECTION:
+example.com.    3600  IN  MX  10 mail1.example.com.
+example.com.    3600  IN  MX  20 mail2.example.com.
+
+# Query nameservers
+$ dig example.com NS +short
+a1-1.akam.net.
+a2-2.akam.net.
+
+# Trace full DNS resolution path
+$ dig www.example.com +trace
+; <<>> DiG <<>> www.example.com +trace
+;; Received from root server → .com TLD → akam.net authoritative
+;; ANSWER: www.example.com. 300 IN CNAME example.com.edgesuite.net.`
+      }
+    ],
+    comparisons: [
+      {
+        title: "Recursive vs Authoritative DNS",
+        items: [
+          {
+            label: "Recursive Resolver",
+            icon: "🔍",
+            description: "Your ISP's DNS server that chases down answers on your behalf.",
+            points: [
+              "Receives query from client (browser/OS)",
+              "Checks local cache first (honors TTL)",
+              "If not cached: queries root → TLD → authoritative",
+              "Caches the answer for future queries",
+              "Examples: Google (8.8.8.8), Cloudflare (1.1.1.1), ISP resolvers"
+            ]
+          },
+          {
+            label: "Authoritative Server",
+            icon: "📋",
+            description: "The DNS server that holds the definitive zone records for a domain.",
+            points: [
+              "Source of truth for a domain's DNS records",
+              "Responds with definitive answers (not cached copies)",
+              "Managed by domain owner or DNS provider (Akamai Edge DNS)",
+              "Must be highly available — if down, domain is unreachable",
+              "Akamai Edge DNS: 4,000+ PoPs, 100% uptime SLA, DDoS-resilient"
+            ]
+          }
+        ]
+      },
+      {
+        title: "Common DNS Record Types",
+        items: [
+          {
+            label: "Address Records",
+            icon: "📍",
+            description: "Map domain names to IP addresses.",
+            points: [
+              "A — IPv4 address (e.g., 203.0.113.10)",
+              "AAAA — IPv6 address (e.g., 2001:db8::1)",
+              "CNAME — Alias to another domain (cannot coexist at zone apex)"
+            ]
+          },
+          {
+            label: "Service Records",
+            icon: "📧",
+            description: "Direct traffic to specific services.",
+            points: [
+              "MX — Mail server with priority (lower = preferred)",
+              "SRV — Service location with port and weight",
+              "NS — Nameserver delegation for the zone"
+            ]
+          },
+          {
+            label: "Security & Verification",
+            icon: "🔒",
+            description: "Authentication, verification, and security records.",
+            points: [
+              "TXT — SPF, DKIM, DMARC, domain verification",
+              "CAA — Restrict which CAs can issue certificates",
+              "SOA — Zone metadata (serial, refresh, expire)"
+            ]
+          }
+        ]
+      }
+    ],
+    tips: [
+      "Lower TTL before planned DNS changes (reduce to 60s 24h before), increase after",
+      "CNAME records cannot exist at zone apex (example.com) — only at subdomains (www.example.com)",
+      "Edge DNS uses anycast — queries routed to nearest Akamai PoP automatically",
+      "Always configure both A and AAAA records for IPv6 readiness",
+      "TXT records for SPF, DKIM, and DMARC are critical for email deliverability"
+    ],
     whenToUse: [
       "You're setting up or migrating authoritative DNS to Akamai Edge DNS for high availability",
       "DNS-level DDoS protection is needed for critical domains",
@@ -979,6 +1626,67 @@ Client → Server: Finished
 Application data now encrypted with AES-256-GCM
 Session keys derived from ECDHE shared secret via HKDF`
     },
+    comparisons: [
+      {
+        title: "TLS 1.2 vs TLS 1.3",
+        items: [
+          {
+            label: "TLS 1.2",
+            icon: "🔐",
+            description: "Widely supported, established protocol (2008).",
+            points: [
+              "Handshake: 2 round-trips (2-RTT)",
+              "Cipher negotiation: client offers list, server picks",
+              "Key exchange: RSA or ECDHE (RSA lacks forward secrecy)",
+              "Resumption: session IDs or session tickets",
+              "Status: still widely used, being phased out"
+            ]
+          },
+          {
+            label: "TLS 1.3",
+            icon: "⚡",
+            description: "Modern, faster, more secure protocol (2018).",
+            points: [
+              "Handshake: 1 round-trip (1-RTT), supports 0-RTT resumption",
+              "Cipher negotiation: removed unsafe ciphers (RC4, 3DES, CBC mode)",
+              "Key exchange: ECDHE only (forward secrecy mandatory)",
+              "Resumption: PSK-based (pre-shared key from prior session)",
+              "Status: recommended default, 95%+ browser support"
+            ]
+          }
+        ]
+      },
+      {
+        title: "Certificate Types",
+        items: [
+          {
+            label: "DV (Domain Validation)",
+            icon: "✅",
+            description: "Verifies domain ownership only.",
+            points: ["Automated validation", "Minutes to issue", "Free to low cost", "Use: blogs, APIs, internal"]
+          },
+          {
+            label: "OV (Organization Validation)",
+            icon: "🏢",
+            description: "Verifies domain + organization identity.",
+            points: ["Organization verified", "1-3 days to issue", "Moderate cost", "Use: business websites"]
+          },
+          {
+            label: "EV (Extended Validation)",
+            icon: "🏛️",
+            description: "Highest level — verifies legal entity.",
+            points: ["Legal, physical, operational checks", "1-2 weeks", "Highest cost", "Use: banking, finance"]
+          }
+        ]
+      }
+    ],
+    tips: [
+      "TLS 1.3 reduces handshake to 1 round-trip — significant latency improvement",
+      "Akamai terminates TLS at the edge — handshake at nearest PoP, not origin",
+      "Forward secrecy (ECDHE) protects past sessions even if private key is later compromised",
+      "SAN certs cover multiple domains; wildcard covers *.domain.com subdomains",
+      "Enhanced TLS on Akamai provides dedicated IP + cert for PCI DSS compliance"
+    ],
     whenToUse: [
       "You need to understand TLS handshake mechanics for performance optimization and debugging",
       "Certificate selection (DV vs OV vs EV, wildcard vs SAN) decisions need to be made",
@@ -1039,6 +1747,42 @@ Session keys derived from ECDHE shared secret via HKDF`
   "anomalyScoreThreshold": 50
 }`
     },
+    comparisons: [
+      {
+        title: "Attack Layers",
+        items: [
+          {
+            label: "Network Layer (L3/L4)",
+            icon: "🌊",
+            description: "Volumetric floods targeting bandwidth and infrastructure.",
+            points: [
+              "SYN floods, UDP floods, ICMP floods",
+              "Absorbed by Akamai's edge capacity (hundreds of Tbps)",
+              "Prolexic scrubbing centers for origin protection",
+              "Mitigation: automatic, no tuning needed"
+            ]
+          },
+          {
+            label: "Application Layer (L7)",
+            icon: "🎯",
+            description: "Targeted attacks exploiting application logic.",
+            points: [
+              "SQL injection, XSS, HTTP floods, slow POST",
+              "WAF rules inspect request content (headers, body, URL)",
+              "Rate controls limit requests per IP/session",
+              "Mitigation: requires rule tuning (alert → analyze → deny)"
+            ]
+          }
+        ]
+      }
+    ],
+    tips: [
+      "WAF tuning follows alert → analyze → deny: start in alert mode, review false positives, then enable deny",
+      "Adaptive Security Engine (ASE) auto-tunes rules based on traffic patterns — less manual work than KRS",
+      "Rate controls should be set per endpoint — login pages need tighter limits than static assets",
+      "Akamai's edge absorbs network DDoS automatically — you don't need to configure this",
+      "Prolexic is for origin DDoS protection (BGP-based) — separate from edge WAF"
+    ],
     whenToUse: [
       "Web applications need protection against OWASP Top 10 vulnerabilities (SQLi, XSS, etc.)",
       "Application-layer DDoS mitigation is needed beyond network-layer protection",
