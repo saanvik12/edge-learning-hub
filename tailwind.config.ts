@@ -47,6 +47,10 @@ export default {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+        adobe: "hsl(var(--adobe-blue))",
+        ajo: "hsl(var(--ajo-red))",
+        akamai: "hsl(var(--akamai-teal))",
+        "use-case": "hsl(var(--use-case-amber))",
         sidebar: {
           DEFAULT: "hsl(var(--sidebar-background))",
           foreground: "hsl(var(--sidebar-foreground))",
