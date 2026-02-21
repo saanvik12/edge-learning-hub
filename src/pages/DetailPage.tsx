@@ -1,5 +1,7 @@
 import { useParams, Link } from "react-router-dom";
 import { detailContent } from "@/data/detail-content";
+import { richPages } from "@/data/rich-pages";
+import RichTopicPage from "@/components/rich-detail/RichTopicPage";
 import { ArrowLeft, ChevronRight, ArrowRight, Copy, Check, Lightbulb } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useState } from "react";
