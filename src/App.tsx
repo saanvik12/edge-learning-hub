@@ -7,6 +7,7 @@ import Index from "./pages/Index";
 import DetailPage from "./pages/DetailPage";
 import UseCases from "./pages/UseCases";
 import AepAjoPage from "./pages/AepAjoPage";
+import AkamaiPage from "./pages/AkamaiPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -20,6 +21,7 @@ const App = () => (
         <Routes>
           <Route path="/" element={<Index />} />
           <Route path="/aep-ajo" element={<AepAjoPage />} />
+          <Route path="/akamai" element={<AkamaiPage />} />
           <Route path="/use-cases" element={<UseCases />} />
           <Route path="/:id" element={<DetailPage />} />
           <Route path="*" element={<NotFound />} />
