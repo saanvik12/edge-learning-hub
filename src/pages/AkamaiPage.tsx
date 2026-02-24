@@ -140,42 +140,71 @@ const TopicSection = ({ data, index }: { data: RichPageData; index: number }) =>
           <h3 className="text-2xl font-bold text-foreground mt-1 mb-3">{architecture.title}</h3>
           <p className="text-muted-foreground mb-6 max-w-3xl">{architecture.description}</p>
 
-          {/* Desktop pipeline */}
-          <div className="hidden md:flex items-stretch gap-0 overflow-x-auto pb-4 mb-4">
-            {architecture.pipeline.map((block, i) => (
-              <div key={i} className="flex items-center shrink-0">
-                <div className={`flex flex-col items-center w-48 rounded-xl border-2 p-5 text-center hover:shadow-md transition-shadow ${block.badgeColor === "accent" ? "border-accent/20 bg-accent/5" : "border-border bg-card"}`}>
-                  {block.badge && (
-                    <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold uppercase mb-2 bg-accent text-accent-foreground">{block.badge}</span>
-                  )}
-                  <div className="w-8 h-8 rounded-full bg-accent/10 flex items-center justify-center text-xs font-bold text-accent mb-2">{i + 1}</div>
-                  <p className="font-semibold text-foreground text-sm">{block.label}</p>
-                  <p className="text-xs text-muted-foreground mt-1 leading-relaxed">{block.description}</p>
-                </div>
-                {i < architecture.pipeline.length - 1 && (
-                  <div className="flex items-center px-1">
-                    <div className="w-6 h-0.5 bg-accent/30" />
-                    <ArrowRight size={16} className="text-accent/50 -ml-1" />
+          {/* Use vertical layout for detailed pipelines (6+ steps), horizontal for shorter ones */}
+          {architecture.pipeline.length >= 6 ? (
+            <div className="space-y-0 mb-4 max-w-4xl">
+              {architecture.pipeline.map((block, i) => (
+                <div key={i} className="flex items-start gap-5">
+                  <div className="flex flex-col items-center shrink-0">
+                    <div className={`w-11 h-11 rounded-full flex items-center justify-center text-sm font-bold shrink-0 ${block.badgeColor === "accent" ? "bg-accent text-accent-foreground" : "bg-muted text-muted-foreground"}`}>
+                      {i + 1}
+                    </div>
+                    {i < architecture.pipeline.length - 1 && (
+                      <div className="w-0.5 min-h-[2rem] flex-1 bg-gradient-to-b from-accent/30 to-accent/10" />
+                    )}
                   </div>
-                )}
-              </div>
-            ))}
-          </div>
-          {/* Mobile pipeline */}
-          <div className="md:hidden space-y-0 mb-4">
-            {architecture.pipeline.map((block, i) => (
-              <div key={i} className="flex items-start gap-4">
-                <div className="flex flex-col items-center">
-                  <div className="w-10 h-10 rounded-full bg-accent text-accent-foreground flex items-center justify-center text-sm font-bold shrink-0">{i + 1}</div>
-                  {i < architecture.pipeline.length - 1 && <div className="w-0.5 h-10 bg-gradient-to-b from-accent/40 to-accent/10" />}
+                  <div className={`pt-2 pb-6 flex-1 ${i < architecture.pipeline.length - 1 ? '' : ''}`}>
+                    <div className="flex items-center gap-2 mb-1">
+                      <p className="font-bold text-foreground">{block.label}</p>
+                      {block.badge && (
+                        <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-accent text-accent-foreground">{block.badge}</span>
+                      )}
+                    </div>
+                    <p className="text-sm text-muted-foreground leading-relaxed">{block.description}</p>
+                  </div>
                 </div>
-                <div className="pt-1.5 pb-4">
-                  <p className="font-semibold text-foreground text-sm">{block.label}</p>
-                  <p className="text-muted-foreground text-sm mt-0.5">{block.description}</p>
-                </div>
+              ))}
+            </div>
+          ) : (
+            <>
+              {/* Desktop horizontal pipeline for shorter flows */}
+              <div className="hidden md:flex items-stretch gap-0 overflow-x-auto pb-4 mb-4">
+                {architecture.pipeline.map((block, i) => (
+                  <div key={i} className="flex items-center shrink-0">
+                    <div className={`flex flex-col items-center w-48 rounded-xl border-2 p-5 text-center hover:shadow-md transition-shadow ${block.badgeColor === "accent" ? "border-accent/20 bg-accent/5" : "border-border bg-card"}`}>
+                      {block.badge && (
+                        <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold uppercase mb-2 bg-accent text-accent-foreground">{block.badge}</span>
+                      )}
+                      <div className="w-8 h-8 rounded-full bg-accent/10 flex items-center justify-center text-xs font-bold text-accent mb-2">{i + 1}</div>
+                      <p className="font-semibold text-foreground text-sm">{block.label}</p>
+                      <p className="text-xs text-muted-foreground mt-1 leading-relaxed">{block.description}</p>
+                    </div>
+                    {i < architecture.pipeline.length - 1 && (
+                      <div className="flex items-center px-1">
+                        <div className="w-6 h-0.5 bg-accent/30" />
+                        <ArrowRight size={16} className="text-accent/50 -ml-1" />
+                      </div>
+                    )}
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
+              {/* Mobile vertical pipeline */}
+              <div className="md:hidden space-y-0 mb-4">
+                {architecture.pipeline.map((block, i) => (
+                  <div key={i} className="flex items-start gap-4">
+                    <div className="flex flex-col items-center">
+                      <div className="w-10 h-10 rounded-full bg-accent text-accent-foreground flex items-center justify-center text-sm font-bold shrink-0">{i + 1}</div>
+                      {i < architecture.pipeline.length - 1 && <div className="w-0.5 h-10 bg-gradient-to-b from-accent/40 to-accent/10" />}
+                    </div>
+                    <div className="pt-1.5 pb-4">
+                      <p className="font-semibold text-foreground text-sm">{block.label}</p>
+                      <p className="text-muted-foreground text-sm mt-0.5">{block.description}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
         </div>
 
         {/* Key Concepts */}
