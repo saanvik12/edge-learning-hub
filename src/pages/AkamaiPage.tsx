@@ -51,6 +51,7 @@ const GlossaryChip = ({ term, definition }: { term: string; definition: string }
 // ─── Topic order ───
 const topicOrder = [
   "akamai-product-map",
+  "akamai-networking",
   "akamai-dns",
   "akamai-tls",
   "akamai-waf",
