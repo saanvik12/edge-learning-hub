@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { akamaiPages } from "@/data/rich-pages/akamai-all";
 import type { RichPageData, CodeExample, ComparisonGroup, VisualBlock } from "@/components/rich-detail/types";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import TlsSequenceDiagram from "@/components/rich-detail/TlsSequenceDiagram";
 // ─── Shared Components ───
 const CopyButton = ({ text }: { text: string }) => {
   const [copied, setCopied] = useState(false);
@@ -208,6 +209,9 @@ const TopicSection = ({ data, index }: { data: RichPageData; index: number }) =>
             </>
           )}
         </div>
+
+        {/* TLS Sequence Diagram — only for TLS topic */}
+        {data.id === "akamai-tls" && <TlsSequenceDiagram />}
 
         {/* Visual Blocks (if present) — visual grid before concepts */}
         {visualBlocks && visualBlocks.length > 0 && (
