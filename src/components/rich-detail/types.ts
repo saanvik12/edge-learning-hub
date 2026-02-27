@@ -14,6 +14,14 @@ export interface PipelineBlock {
 export interface ConceptItem {
   title: string;
   content: string;
+  codeSnippet?: { language: string; code: string };
+}
+
+export interface VisualBlock {
+  icon: string;
+  label: string;
+  description: string;
+  items: string[];
 }
 
 export interface ComparisonItem {
@@ -59,6 +67,7 @@ export interface RichPageData {
     pipeline: PipelineBlock[];
   };
   concepts: ConceptItem[];
+  visualBlocks?: VisualBlock[];
   comparisons?: ComparisonGroup[];
   codeExamples: CodeExample[];
   glossary: GlossaryGroup[];

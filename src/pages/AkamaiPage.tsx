@@ -1,9 +1,9 @@
 import { Link } from "react-router-dom";
-import { ArrowLeft, ArrowRight, Copy, Check, Lightbulb, ChevronRight, Brain } from "lucide-react";
+import { ArrowLeft, ArrowRight, Copy, Check, Lightbulb, ChevronRight, ChevronDown, Brain, Shield, Code2 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { akamaiPages } from "@/data/rich-pages/akamai-all";
-import type { RichPageData, CodeExample, ComparisonGroup } from "@/components/rich-detail/types";
-
+import type { RichPageData, CodeExample, ComparisonGroup, VisualBlock } from "@/components/rich-detail/types";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 // ─── Shared Components ───
 const CopyButton = ({ text }: { text: string }) => {
   const [copied, setCopied] = useState(false);
@@ -90,7 +90,8 @@ const SectionNav = ({ activeSection }: { activeSection: string }) => (
 
 // ─── Topic Section ───
 const TopicSection = ({ data, index }: { data: RichPageData; index: number }) => {
-  const { hero, architecture, concepts, comparisons, codeExamples, tips, whenToUse } = data;
+  const { hero, architecture, concepts, comparisons, codeExamples, tips, whenToUse, visualBlocks } = data;
+  const [openConcepts, setOpenConcepts] = useState<Record<number, boolean>>({});
 
   return (
     <section id={data.id} className="py-16 border-t border-border">
@@ -208,18 +209,65 @@ const TopicSection = ({ data, index }: { data: RichPageData; index: number }) =>
           )}
         </div>
 
-        {/* Key Concepts */}
+        {/* Visual Blocks (if present) — visual grid before concepts */}
+        {visualBlocks && visualBlocks.length > 0 && (
+          <div className="mb-10">
+            <h3 className="text-xl font-bold text-foreground mb-4 flex items-center gap-2">
+              <Shield size={20} className="text-accent" />
+              What This Covers
+            </h3>
+            <div className={`grid gap-4 ${visualBlocks.length <= 3 ? 'grid-cols-1 md:grid-cols-3' : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3'}`}>
+              {visualBlocks.map((block, i) => (
+                <div key={i} className="rounded-xl border-2 border-accent/20 bg-accent/5 p-5 hover:shadow-md hover:border-accent/40 transition-all">
+                  <div className="flex items-center gap-3 mb-3">
+                    <span className="text-2xl">{block.icon}</span>
+                    <h4 className="font-bold text-foreground text-sm">{block.label}</h4>
+                  </div>
+                  <p className="text-xs text-muted-foreground mb-3 leading-relaxed">{block.description}</p>
+                  <ul className="space-y-1.5">
+                    {block.items.map((item, j) => (
+                      <li key={j} className="flex items-start gap-2 text-xs text-muted-foreground">
+                        <ChevronRight size={10} className="text-accent shrink-0 mt-0.5" />
+                        <span>{item}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Key Concepts — Collapsible Accordion */}
         <div className="mb-10">
           <h3 className="text-xl font-bold text-foreground mb-4">Key Concepts</h3>
-          <div className="space-y-4">
+          <div className="space-y-2">
             {concepts.map((c, i) => (
-              <div key={i} className="rounded-xl border border-border bg-card p-6 shadow-sm hover:shadow-md transition-shadow">
-                <div className="flex items-center gap-3 mb-3">
-                  <div className="w-8 h-8 rounded-lg bg-accent/10 flex items-center justify-center text-sm font-bold text-accent">{i + 1}</div>
-                  <h4 className="font-semibold text-foreground">{c.title}</h4>
-                </div>
-                <p className="text-sm text-muted-foreground leading-relaxed">{c.content}</p>
-              </div>
+              <Collapsible key={i} open={openConcepts[i] || false} onOpenChange={(open) => setOpenConcepts(prev => ({ ...prev, [i]: open }))}>
+                <CollapsibleTrigger className="w-full">
+                  <div className={`rounded-xl border bg-card p-4 shadow-sm hover:shadow-md transition-all cursor-pointer flex items-center gap-3 ${openConcepts[i] ? 'border-accent/30 bg-accent/5' : 'border-border'}`}>
+                    <div className="w-8 h-8 rounded-lg bg-accent/10 flex items-center justify-center text-sm font-bold text-accent shrink-0">{i + 1}</div>
+                    <h4 className="font-semibold text-foreground text-sm text-left flex-1">{c.title}</h4>
+                    <ChevronDown size={16} className={`text-muted-foreground transition-transform shrink-0 ${openConcepts[i] ? 'rotate-180' : ''}`} />
+                  </div>
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                  <div className="px-4 pb-4 pt-2 ml-11">
+                    <p className="text-sm text-muted-foreground leading-relaxed">{c.content}</p>
+                    {c.codeSnippet && (
+                      <div className="mt-3 rounded-lg border border-border overflow-hidden">
+                        <div className="px-3 py-1.5 bg-muted/50 border-b border-border flex items-center gap-2">
+                          <Code2 size={12} className="text-accent" />
+                          <span className="text-[10px] font-mono text-muted-foreground uppercase">{c.codeSnippet.language}</span>
+                        </div>
+                        <pre className="p-3 text-xs overflow-x-auto bg-[hsl(220,25%,6%)]">
+                          <code className="font-mono text-[hsl(220,15%,80%)] whitespace-pre leading-relaxed">{c.codeSnippet.code}</code>
+                        </pre>
+                      </div>
+                    )}
+                  </div>
+                </CollapsibleContent>
+              </Collapsible>
             ))}
           </div>
         </div>
