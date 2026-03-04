@@ -1124,6 +1124,90 @@ resource "akamai_cps_dv_enrollment" "www" {
 
 # After apply: Akamai issues a DV challenge (DNS TXT record)
 # Validates domain ownership, issues cert, and auto-renews` },
+      { title: "Initial Setup — Bootstrap Existing Policy into Terraform", language: "bash", code: `# Step 1: Create a new directory for your Terraform project
+mkdir terraform-cloudlets && cd terraform-cloudlets
+
+# Step 2: Export your existing Akamai policy as Terraform files
+# This auto-generates .tf files from your live Akamai config
+akamai terraform create cloudlets \\
+  --policy-name="Your-Existing-ER-Policy" \\
+  --group-id="grp_123456789" \\
+  --edgerc=~/.edgerc \\
+  --section=default
+
+# Generated files:
+#   ├── main.tf            ← Provider config + resource definitions
+#   ├── variables.tf       ← Input variables (contract_id, group_id, etc.)
+#   ├── import.sh           ← Script to import existing resources into state
+#   └── terraform.tfvars   ← Variable values
+
+# Step 3: Initialize Terraform + Import existing resources
+terraform init          # Downloads Akamai provider plugin
+sh import.sh            # Links existing Akamai resources to Terraform state
+terraform plan          # ← Should show "No changes" ✓
+                        #    (proves Terraform matches live config)
+
+# Step 4: Commit to Git (infrastructure is now version-controlled)
+git add .
+git commit -m "Initial: Bootstrap existing ER policy under Terraform mgmt"
+git push origin main
+
+# Step 5 (optional): Create a GitHub PR for team review
+# ← Jenkins PR job runs:
+#    terraform init
+#    terraform validate
+#    terraform plan    ← Confirms "No changes" → Posts to PR` },
+      { title: "Everyday Workflow — Making Changes via Terraform + CI/CD", language: "bash", code: `# === EVERYDAY WORKFLOW ===
+# Developer wants to change an Akamai configuration (e.g., update a 
+# cloudlet policy rule, change a caching TTL, add a WAF exception)
+
+# 1. Create a feature branch
+git checkout -b feat/update-er-rules
+
+# 2. Edit the .tf files (your change is just a code diff)
+#    Example: update a match rule in cloudlets.tf
+#    - match_value = "/old-promo"
+#    + match_value = "/summer-sale"
+
+# 3. Preview what will change (local dry run)
+terraform plan
+# Output:
+#   ~ akamai_cloudlets_policy.er_policy
+#       ~ match_rules: "/old-promo" → "/summer-sale"
+#   Plan: 0 to add, 1 to change, 0 to destroy.
+
+# 4. Commit + Push + Open PR
+git add . && git commit -m "Update ER rule: redirect /summer-sale"
+git push origin feat/update-er-rules
+# → Open Pull Request on GitHub
+
+# 5. Jenkins PR Job runs automatically:
+#    ┌─────────────────────────────────────┐
+#    │  terraform init                     │
+#    │  terraform validate   ← syntax OK?  │
+#    │  terraform plan       ← safe diff?  │
+#    │  → Posts plan output as PR comment   │
+#    └─────────────────────────────────────┘
+
+# 6. Team reviews the PR:
+#    - Code diff (what HCL changed)
+#    - Plan output (what Akamai will actually do)
+#    - Approve ✓ → Merge to main
+
+# 7. Jenkins Deploy Pipeline (triggered on merge to main):
+#    ┌──────────────────────────────────────────────┐
+#    │  terraform apply (STAGING network)           │
+#    │  → Smoke tests on staging                    │
+#    │  → Manual approval gate                      │
+#    │  terraform apply (PRODUCTION network)        │
+#    │  → Slack notification: "Deploy complete ✅"   │
+#    └──────────────────────────────────────────────┘
+
+# === ROLLBACK (if something breaks) ===
+git revert HEAD           # Undo the commit
+git push origin main      # Jenkins auto-triggers
+# → terraform apply reverts Akamai to previous state
+# Total rollback time: ~5 minutes (vs. hours of manual investigation)` },
     ],
     glossary: [
       { title: "IaC & CI/CD Terms", color: "accent", terms: [
